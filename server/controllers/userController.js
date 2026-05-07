@@ -3,109 +3,125 @@ import { createToken } from "../lib/utils.js";
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 
-// signup controller
+// ─── Signup ──────────────────────────────────────────────────────────────────
 export const signUp = async (req, res) => {
-  const { fullName, email, password, bio } = req.body;
   try {
-    if (!fullName || !email || !password || !bio) {
-      return res.json({ success: false, message: "Missing Details" });
+    const { fullName, email, password, bio } = req.body;
+
+    if (!fullName || !email || !password) {
+      return res.status(400).json({ success: false, message: "Full name, email and password are required" });
     }
 
-    const user = await User.findOne({ email });
-    if (user) {
-      return res.json({ success: false, message: "User already registered" });
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, message: "Password must be at least 6 characters" });
+    }
+
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(409).json({ success: false, message: "Email already registered" });
     }
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const newUser = await User.create({
-      fullName,
-      email,
+      fullName: fullName.trim(),
+      email: email.toLowerCase().trim(),
       password: hashedPassword,
-      bio,
+      bio: bio?.trim() || "",
     });
+
     const token = createToken(newUser._id);
 
-    return res.json({
+    // Return user data without password
+    const userData = newUser.toObject();
+    delete userData.password;
+
+    return res.status(201).json({
       success: true,
-      userData: newUser,
+      userData,
       token,
-      message: "User created",
+      message: "Account created successfully",
     });
   } catch (error) {
-    console.log(error.message);
-    return res.json({ success: false, message: error.message });
+    console.error("Signup error:", error.message);
+    return res.status(500).json({ success: false, message: "Server error during signup" });
   }
 };
 
-// login controller
+// ─── Login ───────────────────────────────────────────────────────────────────
 export const login = async (req, res) => {
-  const { email, password } = req.body;
   try {
+    const { email, password } = req.body;
+
     if (!email || !password) {
-      return res.json({ success: false, message: "Missing Details" });
+      return res.status(400).json({ success: false, message: "Email and password are required" });
     }
 
-    const userData = await User.findOne({ email });
+    // Explicitly select password since it's excluded by default (select: false)
+    const userData = await User.findOne({ email: email.toLowerCase() }).select("+password");
     if (!userData) {
-      return res.json({ success: false, message: "Invalid credentials" });
+      return res.status(401).json({ success: false, message: "Invalid email or password" });
     }
 
-    const isPassword = await bcrypt.compare(password, userData.password);
-    if (!isPassword) {
-      return res.json({ success: false, message: "Invalid credentials" });
+    const isPasswordValid = await bcrypt.compare(password, userData.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ success: false, message: "Invalid email or password" });
     }
 
     const token = createToken(userData._id);
 
+    // Return user data without password
+    const userResponse = userData.toObject();
+    delete userResponse.password;
+
     return res.json({
       success: true,
-      userData,
+      userData: userResponse,
       token,
-      message: "Login successfull",
+      message: "Login successful",
     });
   } catch (error) {
-    console.log(error.message);
-    return res.json({ success: false, message: error.message });
+    console.error("Login error:", error.message);
+    return res.status(500).json({ success: false, message: "Server error during login" });
   }
 };
 
-// get user data after Authentice
-export const checkaAuth = (req, res) => {
+// ─── Check Auth ──────────────────────────────────────────────────────────────
+export const checkAuth = (req, res) => {
   return res.json({ success: true, user: req.user });
 };
 
-// update profile
-
+// ─── Update Profile ──────────────────────────────────────────────────────────
 export const updateProfile = async (req, res) => {
-  const { profilePic, fullName, bio } = req.body;
-
   try {
-
+    const { profilePic, fullName, bio } = req.body;
     const userId = req.user._id;
-    const userData= await User.findById(userId)
-    let updatedUser;
-    if (!profilePic) {
-      updatedUser = await User.findByIdAndUpdate(
-        userId,
-        { fullName, bio },
-        {  returnDocument: 'after',
-  runValidators: true, },
-      );
-    } else {
-      const upload = cloudinary.uploader.upload(profilePic);
-      const url=  (await upload).secure_url
-      updatedUser = await User.findByIdAndUpdate(
-        userId,
-        { ProfilePic:url, fullName, bio },
-        { returnDocument: 'after',
-  runValidators: true,},
-      );
+
+    const updateData = {};
+    if (fullName !== undefined) updateData.fullName = fullName.trim();
+    if (bio !== undefined) updateData.bio = bio.trim();
+
+    if (profilePic) {
+      const upload = await cloudinary.uploader.upload(profilePic, {
+        folder: "quickchat_avatars",
+        transformation: [{ width: 300, height: 300, crop: "fill" }],
+      });
+      updateData.profilePic = upload.secure_url;
     }
-    return res.json({success:true, user:updatedUser})
+
+    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+      returnDocument: "after",
+      runValidators: true,
+    }).select("-password");
+
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    return res.json({ success: true, user: updatedUser });
   } catch (error) {
-    console.log(error.message);
-    return res.json({ success: false, message: error.message });
+    console.error("Update profile error:", error.message);
+    return res.status(500).json({ success: false, message: "Failed to update profile" });
   }
 };

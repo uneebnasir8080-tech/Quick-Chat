@@ -1,11 +1,15 @@
-import jwt from 'jsonwebtoken'
+import jwt from "jsonwebtoken";
 
-export const createToken= (userId)=>{
-
-        const id= userId.toString()
-        const token= jwt.sign(id, process.env.SECRET)
-    
-        
-    
-    return token
-}
+/**
+ * Create a JWT token with proper payload structure and expiration.
+ * @param {string} userId - MongoDB user ID
+ * @returns {string} Signed JWT token
+ */
+export const createToken = (userId) => {
+  const token = jwt.sign(
+    { userId: userId.toString() },
+    process.env.SECRET,
+    { expiresIn: "7d" }
+  );
+  return token;
+};

@@ -1,32 +1,38 @@
 import mongoose from "mongoose";
 
-
-
-const userSchema= mongoose.Schema({
-    email:{
-        type:String,
-        required:true,
-        unique:true
+const userSchema = new mongoose.Schema(
+  {
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
     },
-    fullName:{
-        type:String,
-        required:true
+    fullName: {
+      type: String,
+      required: true,
+      trim: true,
     },
-    password:{
-        type:String,
-        required:true,
-        minlength:6
+    password: {
+      type: String,
+      required: true,
+      minlength: 6,
+      select: false, // Never return password by default
     },
-    ProfilePic:{
-        type:String,
-        default:''
+    profilePic: {
+      type: String,
+      default: "",
     },
-    bio:{
-        type:String
-    }
+    bio: {
+      type: String,
+      default: "",
+      maxlength: 200,
+    },
+  },
+  { timestamps: true } // Fixed: was "timeStamps" (wrong casing, silently ignored)
+);
 
-},{timeStamps:true})
+const User = mongoose.model("User", userSchema);
 
-const User= mongoose.model('User',userSchema)
-
-export default User
+export default User;

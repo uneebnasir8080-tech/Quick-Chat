@@ -1,27 +1,39 @@
-import mongoose from 'mongoose'
+import mongoose from "mongoose";
 
-const messageModel= mongoose.Schema({
-    senderId:{
-        type:mongoose.Schema.Types.ObjectId,
-        ref:"User",
-        required:true
+const messageSchema = new mongoose.Schema(
+  {
+    senderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
     },
-    receiverId:{
-        type:mongoose.Schema.Types.ObjectId,
-        ref:"User",
-        required:true
+    receiverId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
     },
-    text:{
-        type:String,
+    text: {
+      type: String,
     },
-    image:{
-        type:String,
+    image: {
+      type: String,
     },
-    seen:{
-        type:Boolean
-    }
-},{ timestamps: true})
+    seen: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  { timestamps: true }
+);
 
-const Message= mongoose.model("Message", messageModel)
+// Compound index for efficient chat queries (fetching conversation between two users)
+messageSchema.index({ senderId: 1, receiverId: 1, createdAt: -1 });
 
-export default Message
+// Index for unseen message count queries
+messageSchema.index({ senderId: 1, receiverId: 1, seen: 1 });
+
+const Message = mongoose.model("Message", messageSchema);
+
+export default Message;

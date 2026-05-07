@@ -1,59 +1,75 @@
-import "dotenv/config"
-import express from 'express'
-import {createServer} from 'http'
-import cors from 'cors'
-import { connectDb } from "./lib/db.js"
-import route from "./routes/userRoute.js"
-import msgRoute from "./routes/messageRoute.js"
-import { Server } from "socket.io"
+import "dotenv/config";
+import express from "express";
+import { createServer } from "http";
+import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import { connectDb } from "./lib/db.js";
+import { initializeSocket } from "./lib/socket.js";
+import authRoutes from "./routes/userRoute.js";
+import messageRoutes from "./routes/messageRoute.js";
 
-const app= express()
-const server= createServer(app)
-const PORT = 5000
-export const io= new Server(server,{
-    cors:{
-        origin:"*"
-    }
-})
+const app = express();
+const server = createServer(app);
 
+// Initialize Socket.io with auth
+initializeSocket(server);
 
-export const userSocketMap= {}   // {userId: socketId}
+// ─── Security Middleware ─────────────────────────────────────────────────────
+app.use(helmet());
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    credentials: true,
+  })
+);
 
-io.on('connection',(socket)=>{
-    const userId= socket.handshake.query.userId
-    console.log("User Connected", userId)
+// Rate limiting on auth endpoints to prevent brute force
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // max 20 requests per window
+  message: { success: false, message: "Too many attempts, please try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
-    if(userId) userSocketMap[userId]=socket.id
+// ─── Body Parsing ────────────────────────────────────────────────────────────
+app.use(express.json({ limit: "4mb" }));
 
-    io.emit('getOnlineUser',Object.keys(userSocketMap))
+// ─── Routes ──────────────────────────────────────────────────────────────────
+app.get("/api/status", (req, res) => {
+  res.json({ success: true, message: "Server is live", timestamp: new Date().toISOString() });
+});
 
-    socket.on('disconnect',()=>{
-        console.log("User disconnected",userId)
-        delete userSocketMap[userId]
-    io.emit('getOnlineUser',Object.keys(userSocketMap))
+app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/messages", messageRoutes);
 
-    })
-})
+// ─── 404 Handler ─────────────────────────────────────────────────────────────
+app.use((req, res) => {
+  res.status(404).json({ success: false, message: "Route not found" });
+});
 
+// ─── Global Error Handler ────────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err.stack);
+  res.status(500).json({ success: false, message: "Internal server error" });
+});
 
+// ─── Start Server ────────────────────────────────────────────────────────────
+const PORT = process.env.PORT || 5000;
 
-app.use(express.json({limit:'4mb'}))
-app.use(cors({
-    origin:"*"
-}))
+const startServer = async () => {
+  try {
+    await connectDb();
+    server.listen(PORT, () => {
+      console.log(`🚀 Server is running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("❌ Failed to start server:", error.message);
+    process.exit(1);
+  }
+};
 
-app.get('/api/status',(req, res)=>{
-    res.send("server is live")
-})
-app.use('/api/auth',route)
-app.use('/api/messages',msgRoute)
+startServer();
 
-await connectDb()
-
-// if(process.env.NODE_ENV === 'production') {
-    server.listen(PORT,()=>{
-    console.log("Server is running on", PORT)
-})
-// }
-
-export default server
+export default server;
