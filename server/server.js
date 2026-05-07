@@ -51,9 +51,9 @@ app.use('/api/messages',msgRoute)
 await connectDb()
 
 // if(process.env.NODE_ENV === 'production') {
-//     server.listen(PORT,()=>{
-//     console.log("Server is running on", PORT)
-// })
+    server.listen(PORT,()=>{
+    console.log("Server is running on", PORT)
+})
 // }
 
 export default server
