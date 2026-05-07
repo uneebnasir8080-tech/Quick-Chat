@@ -42,7 +42,7 @@ app.use(cors({
     origin:"*"
 }))
 
-app.use('/api/status',(req, res)=>{
+app.get('/api/status',(req, res)=>{
     res.send("server is live")
 })
 app.use('/api/auth',route)
@@ -50,10 +50,10 @@ app.use('/api/messages',msgRoute)
 
 await connectDb()
 
-if(process.env.NODE_ENV === 'production') {
-    server.listen(PORT,()=>{
-    console.log("Server is running on", PORT)
-})
-}
+// if(process.env.NODE_ENV === 'production') {
+//     server.listen(PORT,()=>{
+//     console.log("Server is running on", PORT)
+// })
+// }
 
 export default server
