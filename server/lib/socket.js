@@ -11,7 +11,7 @@ const userSocketMap = {}; // { userId: socketId }
 function initializeSocket(server) {
   io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_URL || "http://localhost:5173",
+      origin: process.env.CLIENT_URL || "https://quick-chat-me.vercel.app/",
       credentials: true,
     },
   });
